@@ -1,0 +1,14 @@
+{
+  "name": "solfi",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "test":  "pnpm -r run test"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest":    "^1.6.0"
+  }
+}
