@@ -33,9 +33,9 @@ export function isSpike(
     const sorted = [...slots].sort((a, b) => a.slot - b.slot);
     const fees = sorted.map(s => s.prioritizationFee)
 
-    const mean = computeFeeStats(sorted).mean;
-
-    const stddev = computeFeeStats(sorted).stddev;
+    const stats = computeFeeStats(sorted);
+    const mean = stats.mean;
+    const stddev = stats.stddev;
 
     const latest = fees[fees.length - 1];
     return latest > (mean + threshold * stddev)
