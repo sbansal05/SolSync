@@ -1,0 +1,13 @@
+{
+  "name": "@solsync/sdk",
+  "version": "0.0.1",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@solana/web3.js": "^1.95.3",
+    "@solsync/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^5.3.3"
+  }
+}

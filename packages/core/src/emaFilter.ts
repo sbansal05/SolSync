@@ -31,19 +31,19 @@ export function isSpike(
     if (slots.length < 10) return false;
 
     const sorted = [...slots].sort((a, b) => a.slot - b.slot);
-    const fees = sorted.map(s => s.prioritizationFee)
-
-    const stats = computeFeeStats(sorted);
+    const historical = sorted.slice(0, sorted.length - 1);
+    const latest = sorted.map(s => s.prioritizationFee)
+    const stats = computeFeeStats(historical);
     const mean = stats.mean;
     const stddev = stats.stddev;
 
-    const latest = fees[fees.length - 1];
-    return latest > (mean + threshold * stddev)
+    const latest_fee = latest[latest.length - 1];
+    return latest_fee > (mean + threshold * stddev)
 }
 
 export function selectSmoothedFee(
     slots: FeeSlot[],
-    rawFee: number, //percentile fee from day 3
+    rawFee: number, 
     alpha = 0.3,
     threshold =  3
 ): number {
