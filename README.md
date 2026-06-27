@@ -1,6 +1,6 @@
 # SolSync
 
-SolFi is a TypeScript SDK and CLI tool that acts as an optimization layer for Solana transactions. It automatically calculates the exact micro-lamport priority fee and Compute Unit limit required to land your transaction in the next block — without overpaying by even a single lamport.
+SolSync is a TypeScript SDK and CLI tool that acts as an optimization layer for Solana transactions. It automatically calculates the exact micro-lamport priority fee and Compute Unit limit required to land your transaction in the next block — without overpaying by even a single lamport.
 Solana's fee market works at the account level: when a specific program or pool is heavily contested (NFT mint, DeFi protocol), only transactions touching those accounts compete on fees. SolFi queries this localized data, not global averages.
 
 
