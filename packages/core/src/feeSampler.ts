@@ -55,7 +55,6 @@ export async function samplePrioritizationFees(
 
     return data;
 }
-// Add this at the bottom of feeSampler.ts
 export function _resetCache() {
   _cache = null;
 }
