@@ -23,26 +23,46 @@ Every file in `packages/core/src/` maps to one of these decisions.
 
 ```
 SolSync/
-├── BENCHMARKS.md              ← real mainnet benchmark results
-├── ARCHITECTURE.md            ← this file
-├── README.md                  ← quickstart and usage
-├── package.json               ← root workspace config
-├── pnpm-workspace.yaml        ← declares packages/core and packages/sdk
-├── tsconfig.json              ← shared TypeScript config (strict: true)
+├── BENCHMARKS.md                  ← real mainnet benchmark results
+├── ARCHITECTURE.md                ← this file
+├── README.md                      ← quickstart and usage
+├── LICENSE
+├── package.json                   ← root workspace config
+├── pnpm-workspace.yaml            ← declares core, sdk, cli packages
+├── pnpm-lock.yaml
+├── tsconfig.json                  ← shared TypeScript config (strict: true)
+├── .gitignore
 │
 └── packages/
-    ├── core/                  ← all optimization logic lives here
-    │   └── src/
-    │       ├── index.ts           ← re-exports everything
-    │       ├── feeSampler.ts      ← Decision 1: fetch fee data from RPC
-    │       ├── percentileEngine.ts← Decision 1: compute p50–p99 from data
-    │       ├── emaFilter.ts       ← Decision 1: smooth + spike detection
-    │       └── cuOptimizer.ts     ← Decision 2: simulate tx, get CU count
     │
-    └── sdk/                   ← developer-facing wrapper
+    ├── core/                      ← all optimization logic (no CLI, no HTTP server)
+    │   ├── package.json
+    │   ├── tsconfig.json
+    │   └── src/
+    │       ├── index.ts               ← re-exports everything
+    │       ├── feeSampler.ts          ← Decision 1: fetch fee data from RPC
+    │       ├── feeSampler.test.ts
+    │       ├── percentileEngine.ts    ← Decision 1: compute p50–p99 from data
+    │       ├── percentileEngine.test.ts
+    │       ├── emaFilter.ts           ← Decision 1: EMA smooth + spike detection
+    │       ├── emaFilter.test.ts
+    │       ├── cuOptimizer.ts         ← Decision 2: simulate tx, get CU count
+    │       └── cuOptimizer.test.ts
+    │
+    ├── sdk/                       ← developer-facing npm package (@solsync/sdk)
+    │   ├── package.json
+    │   ├── tsconfig.json
+    │   └── src/
+    │       ├── index.ts               ← public API surface (tree-shakeable)
+    │       └── SolSyncClient.ts       ← Decision 3: orchestrates all three decisions
+    │
+    └── cli/                       ← terminal tool (@solsync/cli)
+        ├── package.json
+        ├── tsconfig.json
         └── src/
-            ├── index.ts           ← public API surface
-            └── SolSyncClient.ts   ← Decision 3: orchestrates everything
+            ├── index.ts               ← Commander.js entrypoint, "solsync" binary
+            └── commands/
+                └── analyze.ts         ← solsync analyze command (chalk output + --json)
 ```
 
 ---
@@ -53,11 +73,11 @@ This is the exact path data travels every time `client.optimize()` is called:
 
 ```
 Developer calls client.optimize(tx, writableAccounts)
-        │
-        ▼
+                    │
+                    ▼
 ┌─────────────────────────────────────────────┐
-│              PHASE 1 — Fee Analysis         │
-│                  (1 RPC call)               │
+│           PHASE 1 — Fee Analysis            │
+│               (1 RPC call)                  │
 │                                             │
 │  feeSampler.ts                              │
 │  └─ check cache (skip RPC if < 1.5s old)    │
@@ -72,17 +92,17 @@ Developer calls client.optimize(tx, writableAccounts)
 │                                             │
 │  emaFilter.ts                               │
 │  └─ sort slots oldest → newest              │
-│  └─ apply EMA (alpha=0.3)                   │
+│  └─ apply EMA (alpha = 0.3)                 │
 │  └─ check for spike (3σ rule)               │
-│  └─ spike? use EMA : use max(p75, EMA)      │
+│  └─ spike? → use EMA : use max(p75, EMA)    │
 │                                             │
 │  OUTPUT: microLamportsPerCU (one number)    │
 └─────────────────────────────────────────────┘
-        │
-        ▼
+                 │
+                 ▼
 ┌─────────────────────────────────────────────┐
 │           PHASE 2 — CU Optimization         │
-│                  (1 RPC call)               │
+│               (1 RPC call)                  │
 │                                             │
 │  cuOptimizer.ts                             │
 │  └─ simulateTransaction(tx, {               │
@@ -91,27 +111,28 @@ Developer calls client.optimize(tx, writableAccounts)
 │     })                                      │
 │  └─ read unitsConsumed (fallback: 200,000)  │
 │  └─ apply 15% buffer                        │
-│  └─ clamp to 1,400,000 max                  │ 
+│  └─ clamp to 1,400,000 max                  │
 │                                             │
 │  OUTPUT: computeUnitLimit (one number)      │
 └─────────────────────────────────────────────┘
-        │
-        ▼
+              │
+              ▼
 ┌─────────────────────────────────────────────┐
 │           PHASE 3 — Transaction Assembly    │
-│                  (no RPC call)              │
+│               (no RPC call)                 │
 │                                             │
 │  SolSyncClient.ts                           │
 │  └─ ComputeBudgetProgram.setComputeUnitLimit│
 │  └─ ComputeBudgetProgram.setComputeUnitPrice│
 │  └─ prepend both to instruction list        │
 │  └─ rebuild VersionedTransaction            │
+│  └─ preserve Address Lookup Tables          │
 │                                             │
 │  OUTPUT: { tx, result }                     │
 └─────────────────────────────────────────────┘
-        │
-        ▼
-Developer signs and sends tx
+             │
+             ▼
+Developer signs tx and calls connection.sendTransaction(tx)
 ```
 
 **Total RPC calls per optimization: exactly 2**
@@ -119,11 +140,51 @@ Developer signs and sends tx
 
 ---
 
+## CLI Data Flow
+
+When `solsync analyze` is run from the terminal:
+
+```
+User runs: solsync analyze --rpc <url> --accounts <keys> --urgency high
+        │
+        ▼
+cli/src/index.ts
+└─ Commander.js parses flags
+└─ calls registerAnalyze(program)
+        │
+        ▼
+cli/src/commands/analyze.ts
+└─ creates Connection from --rpc flag
+└─ maps --accounts strings → PublicKey[]
+└─ calls samplePrioritizationFees()   ← core package
+└─ calls computeFeeStats()            ← core package
+└─ calls selectFeeByUrgency()         ← core package
+        │
+        ├─ --json flag → console.log(JSON.stringify(result))
+        │
+        └─ default → chalk formatted table:
+               SolSync Fee Analysis
+               ────────────────────────────────────────
+               Accounts queried   2
+               Samples found      54
+               ────────────────────────────────────────
+               p50 (low)          8,100 µ◎/CU
+               p75 (medium)       22,100 µ◎/CU
+               p90 (high)         31,000 µ◎/CU
+               p95 (critical)     44,500 µ◎/CU
+               ────────────────────────────────────────
+               Recommended        22,100 µ◎/CU  (medium)
+```
+
+The CLI only uses `core` — it never imports from `sdk`. This keeps the dependency graph clean and the binary small.
+
+---
+
 ## Module Reference
 
 ### `feeSampler.ts` — Decision 1, Step 1
 
-**What it does:** Queries the Solana RPC for recent priority fees paid on specific accounts. Filters out zero-fee slots (uncontested blocks). Caches results for 1.5 seconds to prevent rate limiting.
+**What it does:** Queries the Solana RPC for recent priority fees paid on specific accounts. Filters out zero-fee slots. Caches results for 1.5 seconds to prevent rate limiting.
 
 **Key exports:**
 ```typescript
@@ -134,18 +195,18 @@ getFallbackFees()            // returns safe defaults when RPC returns empty
 
 **Critical detail:** Always pass **writable** accounts only. Read-only accounts create zero fee pressure and return misleading (lower) data.
 
-**Cache key:** A comma-joined string of all account base58 addresses. Same accounts within 1.5s → cache hit, no RPC call.
+**Cache key:** Comma-joined string of all account base58 addresses. Same accounts within 1.5s → cache hit, no RPC call.
 
 ---
 
 ### `percentileEngine.ts` — Decision 1, Step 2
 
-**What it does:** Takes the raw `FeeSlot[]` array and computes statistical percentiles. Maps an urgency level to the correct percentile.
+**What it does:** Takes the raw `FeeSlot[]` array and computes statistical percentiles. Maps an urgency level to the correct percentile value.
 
 **Key exports:**
 ```typescript
-FeeStats                // p50/p75/p90/p95/p99/mean/max/stddev/sampleCount
-UrgencyLevel            // 'low' | 'medium' | 'high' | 'critical'
+FeeStats         // p50/p75/p90/p95/p99/mean/max/stddev/sampleCount
+UrgencyLevel     // 'low' | 'medium' | 'high' | 'critical'
 computeFeeStats()       // sorts fees, computes all percentiles
 selectFeeByUrgency()    // low→p50, medium→p75, high→p90, critical→p95
 ```
@@ -156,41 +217,40 @@ index = ceil(percentile/100 × n) - 1
 p90   = sortedFees[ceil(0.90 × n) - 1]
 ```
 
-**Empty array handling:** Returns safe hardcoded defaults (p50=1000, p75=5000, p90=10000...) so the rest of the pipeline never crashes on empty data.
+**Empty array handling:** Returns safe hardcoded defaults (p50=1000, p75=5000, p90=10000...) so the pipeline never crashes on empty data.
 
 ---
 
 ### `emaFilter.ts` — Decision 1, Step 3
 
-**What it does:** Smooths the raw fee data using Exponential Moving Average to prevent chasing sudden spikes. Detects outliers using the 3-sigma rule.
+**What it does:** Smooths fee data using Exponential Moving Average to prevent chasing sudden spikes. Detects outliers using the 3-sigma rule.
 
 **Key exports:**
 ```typescript
-emaSmooth()          // applies EMA, returns smoothed fee
+emaSmooth()          // applies EMA, returns one smoothed fee number
 isSpike()            // returns true if latest fee is a 3σ outlier
-selectSmoothedFee()  // combines both: spike? EMA : max(percentile, EMA)
+selectSmoothedFee()  // combines both: spike? → EMA : max(percentile, EMA)
 ```
 
 **EMA formula:**
 ```
 EMA_t = α × fee_t + (1 - α) × EMA_{t-1}
 Default α = 0.3
+Slots must be sorted oldest → newest before the loop
 ```
 
 **Spike detection:**
 ```
 mean   = average of all fees
 stddev = √(average of squared distances from mean)
-spike  = latest > mean + 3 × stddev
+spike  = latest fee > mean + 3 × stddev
 ```
-
-**Why sort oldest-first before EMA:** EMA is time-ordered. Feeding it out of order produces a meaningless result. Always sort by `slot` ascending before the loop.
 
 ---
 
 ### `cuOptimizer.ts` — Decision 2
 
-**What it does:** Simulates the transaction against the current chain state to find the exact Compute Units consumed. Adds a safety buffer and clamps to Solana's maximum.
+**What it does:** Simulates the transaction against current chain state to find exact Compute Units consumed. Adds a safety buffer. Clamps to Solana's maximum.
 
 **Key exports:**
 ```typescript
@@ -199,7 +259,7 @@ estimateComputeUnits()  // async — calls simulateTransaction
 applyBuffer()           // pure math — consumed × (1 + buffer), clamped
 ```
 
-**Two mandatory flags:**
+**Two mandatory simulation flags:**
 ```typescript
 replaceRecentBlockhash: true  // prevents blockhash expiry failures
 sigVerify: false              // transaction is unsigned at this point
@@ -211,35 +271,51 @@ recommended = ceil(consumed × 1.15)
 recommended = min(recommended, 1,400,000)
 ```
 
-**Fallback:** If `unitsConsumed` is null (some RPC nodes don't return it), falls back to `200,000` — the Solana default.
-
 ---
 
 ### `SolSyncClient.ts` — Decision 3
 
-**What it does:** The orchestrator. Calls fee analysis and CU optimization, builds the two `ComputeBudget` instructions, and prepends them to the original transaction.
+**What it does:** The orchestrator. Calls fee analysis and CU optimization, builds two `ComputeBudget` instructions, prepends them to the original transaction.
 
 **Key exports:**
 ```typescript
-SolSyncClient           // main class
-OptimizationResult      // full metadata returned alongside optimized tx
+SolSyncClient       // main class
+OptimizationResult  // full metadata returned alongside optimized tx
 ```
 
 **Instruction ordering — critical:**
 ```
-[0] SetComputeUnitLimit   ← MUST be first
-[1] SetComputeUnitPrice   ← MUST be second
-[2] ...original instructions
+index 0 → SetComputeUnitLimit   ← MUST be first
+index 1 → SetComputeUnitPrice   ← MUST be second
+index 2+ → original instructions
 ```
 
-Solana's runtime reads the budget before executing any other instruction. Some validators enforce this order strictly.
+---
 
-**Transaction rebuild:**
+### `cli/src/index.ts` — CLI entrypoint
+
+**What it does:** Creates the Commander.js program, sets the binary name to `solsync`, registers all subcommands, parses `process.argv`.
+
 ```typescript
-TransactionMessage.decompile(originalTx.message)
-// → prepend budget instructions
-// → preserve Address Lookup Tables
-// → recompile to VersionedTransaction
+#!/usr/bin/env node
+program.name('solsync')
+program.description('Dynamic Priority Fee & Compute Budget Optimization Engine')
+registerAnalyze(program)
+program.parse(process.argv)
+```
+
+---
+
+### `cli/src/commands/analyze.ts` — analyze subcommand
+
+**What it does:** Implements `solsync analyze`. Takes `--rpc`, `--accounts`, `--urgency`, `--json` flags. Calls core directly (no SDK dependency). Outputs either a chalk-formatted table or raw JSON.
+
+**Flags:**
+```
+--rpc <url>          required — Solana RPC endpoint
+--accounts <keys...> required — writable account public keys
+--urgency <level>    optional — low|medium|high|critical (default: medium)
+--json               optional — machine-readable output for scripting
 ```
 
 ---
@@ -247,13 +323,16 @@ TransactionMessage.decompile(originalTx.message)
 ## Key Design Decisions
 
 ### Why filter zero-fee slots?
-Zero-fee slots are uncontested blocks — no one needed to pay a priority fee. Including them skews percentiles downward and causes underpricing during actual congestion.
+Zero-fee slots are uncontested blocks. Including them skews percentiles downward and causes underpricing during actual congestion.
 
 ### Why EMA with alpha=0.3?
-Alpha=0.3 gives the last slot ~30% weight while history carries 70%. A single NFT mint spike won't cause SolSync to overpay on the next transaction. Alpha is configurable (0.1=very smooth, 0.6=very reactive).
+Alpha=0.3 gives the latest slot 30% weight while history carries 70%. A single NFT mint spike won't cause SolSync to overpay on the next transaction. Configurable via `emaAlpha`.
 
 ### Why 15% CU buffer?
-Programs with variable-length loops (iterating over token accounts, order books) consume slightly different CUs depending on current state. 15% covers this variance without significant overpay. Configurable via `cuBufferPct`.
+Programs with variable-length loops consume slightly different CUs depending on current state. 15% covers this variance without significant overpay. Configurable via `cuBufferPct`.
+
+### Why does the CLI import core directly, not sdk?
+Keeps the CLI binary small and the dependency graph clean. The SDK adds the `SolSyncClient` wrapper — useful for developers integrating programmatically, but unnecessary overhead for a terminal command.
 
 ### Why exactly 2 RPC calls?
 One for fees (`getRecentPrioritizationFees`), one for simulation (`simulateTransaction`). The fee call is cached — repeated calls within 1.5s cost zero additional network time. Total latency target: under 300ms.
@@ -267,15 +346,11 @@ Only writable accounts create transaction conflicts. Read-only accounts can be a
 
 ```typescript
 new SolSyncClient({
-  connection:       Connection,    // required — your RPC connection
-  urgency:          'medium',      // low|medium|high|critical → p50/p75/p90/p95
-  emaAlpha:         0.3,           // EMA smoothing (0.1 slow → 0.6 reactive)
-  cuBufferPct:      0.15,          // CU headroom above simulated usage
-  maxMicroLamports: 1_000_000,     // fee ceiling cap
-  spikeThreshold:   3,             // σ multiplier for spike detection
-  cacheTtlMs:       1500,          // fee cache duration in ms
-  cuFallback:       200_000,       // CU limit when simulation returns null
-  feeFloor:         1_000,         // minimum µ◎/CU — never go below this
+  connection:       Connection,   // required
+  urgency:          'medium',     // low|medium|high|critical → p50/p75/p90/p95
+  emaAlpha:         0.3,          // EMA smoothing (0.1 slow → 0.6 reactive)
+  cuBufferPct:      0.15,         // CU headroom above simulated usage
+  maxMicroLamports: 5_000_000,    // fee ceiling cap
 })
 ```
 
@@ -285,22 +360,29 @@ new SolSyncClient({
 
 ```
 packages/core/src/
-├── feeSampler.test.ts       4 tests  — cache, filtering, fallback, RPC mock
-├── percentileEngine.test.ts 8 tests  — percentile math, edge cases, urgency map
-├── emaFilter.test.ts        8 tests  — EMA convergence, spike detection, selector
-└── cuOptimizer.test.ts      5 tests  — buffer math, clamping, edge cases
-                            ──────────
-                            25 tests total, all passing
+├── feeSampler.test.ts          4 tests  — cache, filtering, fallback, RPC mock
+├── percentileEngine.test.ts    8 tests  — percentile math, edge cases, urgency map
+├── emaFilter.test.ts           8 tests  — EMA convergence, spike detection, selector
+└── cuOptimizer.test.ts         5 tests  — buffer math, clamping, edge cases
+                               ──────────
+                               25 tests total, all passing
+```
+
+Run all tests:
+```bash
+pnpm test
 ```
 
 ---
 
 ## Dependencies
 
-| Package            | Purpose                                         |
-|--------------------|-------------------------------------------------|
-| @solana/web3.js    | RPC, VersionedTransaction, ComputeBudgetProgram |
-| typescript (strict)| Full type safety across all modules             |
-| vitest             | Unit + integration tests                        |
-| dotenv             | Load RPC URL from .env                          |
-| pnpm workspaces    | Monorepo — core and sdk as separate packages    |
+| Package            | Used in       | Purpose                                         |
+|--------------------|---------------|-------------------------------------------------|
+| @solana/web3.js    | core, sdk     | RPC, VersionedTransaction, ComputeBudgetProgram |
+| typescript (strict)| all packages  | Full type safety across all modules             |
+| vitest             | core          | Unit + integration tests                        |
+| dotenv             | core          | Load RPC URL from .env                          |
+| commander          | cli           | CLI argument parsing                            |
+| chalk              | cli           | Terminal colour output                          |
+| pnpm workspaces    | root          | Monorepo — core, sdk, cli as separate packages  |
