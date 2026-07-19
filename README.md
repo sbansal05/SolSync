@@ -240,7 +240,7 @@ solsync analyze --rpc $RPC_URL --accounts <pubkey> --json | jq .recommended
 
 ## Benchmarks
 
-On 20 consecutive runs against Raydium AMM v4 and Jupiter v6 on mainnet-beta:
+On 20 consecutive runs against a contested Solana mainnet-beta account
 
 | Metric | Value |
 |---|---|
