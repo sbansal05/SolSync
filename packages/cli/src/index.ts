@@ -7,7 +7,7 @@ const program  = new Command();
 
 program
     .name("solsync")
-    .description("Dynamic Priority Fee & Compute Bughet Optimization Engine")
+    .description("Dynamic Priority Fee & Compute Budget Optimization Engine")
     .version("0.0.1");
 
 registerAnalyze(program);
