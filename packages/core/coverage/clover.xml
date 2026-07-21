@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1784654970222" clover="3.2.0">
-  <project timestamp="1784654970222" name="All files">
+<coverage generated="1784655183315" clover="3.2.0">
+  <project timestamp="1784655183315" name="All files">
     <metrics statements="285" coveredstatements="260" conditionals="42" coveredconditionals="37" methods="11" coveredmethods="10" elements="338" coveredelements="307" complexity="0" loc="285" ncloc="285" packages="1" files="5" classes="5"/>
     <file name="cuOptimizer.ts" path="C:\Users\hp\Projects\SolSync\packages\core\src\cuOptimizer.ts">
       <metrics statements="54" coveredstatements="54" conditionals="6" coveredconditionals="5" methods="2" coveredmethods="2"/>
