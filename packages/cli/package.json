@@ -1,5 +1,5 @@
 {
-    "name": "solsync/cli",
+    "name": "@solsync/cli",
     "version": "0.0.1",
     "bin": {
         "solsync": "src/index.ts"
