@@ -1,13 +1,17 @@
 {
   "name": "@solsync/sdk",
-  "version": "0.0.1",
-  "main": "src/index.ts",
-  "dependencies": {
-    "@solana/web3.js": "^1.95.3",
-    "@solsync/core": "workspace:*"
-  },
-  "devDependencies": {
-    "@types/node": "^20.19.43",
-    "typescript": "^5.3.3"
+  "version": "0.1.0",
+  "description": "Dynamic priority fee & compute budget optimization for Solana",
+  "repository": "github:sbansal05/solsync",
+  "license": "MIT",
+  "keywords": ["solana", "priority-fee", "compute-budget", "web3"],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   }
 }
