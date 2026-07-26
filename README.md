@@ -7,6 +7,9 @@ Solana's fee market works at the account level: when a specific program or pool 
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Version](https://img.shields.io/badge/version-0.1.0-blue)
 ![Built With](https://img.shields.io/badge/built%20with-TypeScript-3178c6)
+[![npm version](https://img.shields.io/npm/v/@solsync/sdk.svg)](https://www.npmjs.com/package/@solsync/sdk)
+
+
 
 ---
 
