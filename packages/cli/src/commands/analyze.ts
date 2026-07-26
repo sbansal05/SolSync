@@ -1,10 +1,8 @@
 import { Command } from "commander";
 import { Connection, PublicKey } from "@solana/web3.js";
 import chalk from "chalk";
-import { samplePrioritizationFees } from "@solsync/core/src/feeSampler";
-import { computeFeeStats, selectFeeByUrgency } from "@solsync/core/src/percentileEngine";
-import type { UrgencyLevel } from "@solsync/core/src/percentileEngine";
-
+import { samplePrioritizationFees, computeFeeStats, selectFeeByUrgency } from "@solsync/core";
+import type { UrgencyLevel } from "@solsync/core";
 export function registerAnalyze(program: Command) {
     program
         .command("analyze")
