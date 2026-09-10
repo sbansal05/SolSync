@@ -296,7 +296,7 @@ Currently SolSync is built around `VersionedTransaction` (V0 format). Legacy tra
 Contributions are welcome. To get started:
 
 ```bash
-git clone https://github.com/yourusername/solsync
+git clone https://github.com/sbansal05/solsync
 cd solsync
 pnpm install
 pnpm build
