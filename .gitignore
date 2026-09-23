@@ -4,3 +4,8 @@ test-ledger/
 test-wallet.json
 *.env
 .env.local
+coverage/
+dist/
+
+coverage/
+dist/
